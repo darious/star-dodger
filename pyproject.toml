@@ -1,0 +1,13 @@
+[project]
+name = "star-dodger"
+version = "0.1.0"
+description = "Python pygame remake of the Amstrad CPC BASIC game STAR DODGER v2 by G. French."
+readme = "README.md"
+requires-python = ">=3.11"
+license = "MIT"
+dependencies = [
+    "pygame>=2.6.1",
+]
+
+[tool.uv]
+package = false
