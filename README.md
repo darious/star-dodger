@@ -20,6 +20,7 @@ The original BASIC listing is preserved in [`original/star-dodger.bas`](original
   - persistent top-six high scores
   - generated retro sound effects
 - `go/cmd/stardodgerplus` - Go/Ebiten version of Plus with the same classic gameplay.
+- `rust/` - Rust/macroquad version with CPC look, scaling, and generated sound.
 
 ## Requirements
 
@@ -29,6 +30,8 @@ The original BASIC listing is preserved in [`original/star-dodger.bas`](original
 `pygame` is declared in `pyproject.toml` and installed automatically by `uv`.
 
 The Go version requires Go 1.24+ and downloads Ebiten through Go modules.
+
+The Rust version requires Rust/Cargo and downloads macroquad through Cargo.
 
 ## Run
 
@@ -57,6 +60,13 @@ Go Plus version:
 go run ./go/cmd/stardodgerplus
 ```
 
+Rust version:
+
+```bash
+cd rust
+cargo run --release
+```
+
 Or build a native binary:
 
 ```bash
@@ -79,6 +89,7 @@ python/stardodger/         Python package used by the uv entry points
 python/tests/              Python regression tests
 go/cmd/stardodgerplus/     Go/Ebiten executable
 go/internal/nameentry/     Small Go helper package with unit tests
+rust/                      Rust/macroquad executable
 ```
 
 ## Controls

@@ -8,6 +8,7 @@ __pycache__/
 star_dodger_plus_scores.json
 /stardodgerplus
 /stardodgerplus.exe
+rust/target/
 
 .DS_Store
 Thumbs.db
