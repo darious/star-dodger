@@ -14,6 +14,7 @@ import (
 	"github.com/darious/star-dodger/go/internal/cpcfont"
 	"github.com/darious/star-dodger/go/internal/nameentry"
 	"github.com/hajimehoshi/ebiten/v2"
+	"github.com/hajimehoshi/ebiten/v2/audio"
 	"github.com/hajimehoshi/ebiten/v2/ebitenutil"
 	"github.com/hajimehoshi/ebiten/v2/inpututil"
 	"github.com/hajimehoshi/ebiten/v2/text"
@@ -25,6 +26,7 @@ const (
 	screenH        = 400
 	cpcModeW       = 320
 	cpcModeH       = 200
+	audioRate      = 22050
 	originalAuthor = "G. French"
 	originalDate   = "14-2-92"
 	scorePath      = "star_dodger_plus_scores.json"
@@ -64,6 +66,13 @@ type obstacle struct {
 	Y float64
 }
 
+type soundBank struct {
+	context *audio.Context
+	enabled bool
+	samples map[string][]byte
+	players []*audio.Player
+}
+
 type game struct {
 	mode         mode
 	rng          *rand.Rand
@@ -71,6 +80,7 @@ type game struct {
 	cpcGameImage *ebiten.Image
 	cpcVisual    bool
 	cpcFont      *cpcfont.Font
+	sounds       *soundBank
 
 	hall []scoreEntry
 
@@ -108,6 +118,7 @@ func main() {
 		cpcGameImage: ebiten.NewImage(cpcModeW, cpcModeH),
 		hall:         loadScores(),
 		cpcFont:      font,
+		sounds:       newSoundBank(),
 	}
 
 	if err := ebiten.RunGame(g); err != nil {
@@ -156,7 +167,101 @@ func sortScores(scores []scoreEntry) {
 	})
 }
 
+func newSoundBank() *soundBank {
+	return &soundBank{
+		context: audio.NewContext(audioRate),
+		enabled: true,
+		samples: map[string][]byte{
+			"climb":    squareSound([]note{{Frequency: 520, Duration: 28, Volume: 0.10}}),
+			"key":      squareSound([]note{{Frequency: 880, Duration: 22, Volume: 0.14}}),
+			"complete": squareSound([]note{{Frequency: 660, Duration: 55, Volume: 0.18}, {Frequency: 880, Duration: 55, Volume: 0.18}, {Frequency: 1320, Duration: 90, Volume: 0.16}}),
+			"crash":    noiseSound(220, 0.24),
+		},
+	}
+}
+
+type note struct {
+	Frequency float64
+	Duration  int
+	Volume    float64
+}
+
+func squareSound(notes []note) []byte {
+	var data []byte
+	for _, note := range notes {
+		total := max(1, audioRate*note.Duration/1000)
+		for i := 0; i < total; i++ {
+			phase := math.Mod(float64(i)*note.Frequency/float64(audioRate), 1)
+			envelope := math.Min(1, math.Min(float64(i)/math.Max(1, float64(total)*0.12), float64(total-i)/math.Max(1, float64(total)*0.22)))
+			value := -1.0
+			if phase < 0.5 {
+				value = 1.0
+			}
+			data = appendStereoSample(data, int16(value*envelope*note.Volume*32767))
+		}
+	}
+	return data
+}
+
+func noiseSound(durationMS int, volume float64) []byte {
+	rng := rand.New(rand.NewSource(1992))
+	total := max(1, audioRate*durationMS/1000)
+	data := make([]byte, 0, total*4)
+	for i := 0; i < total; i++ {
+		envelope := math.Exp(-4.5 * float64(i) / float64(total))
+		value := (rng.Float64()*2 - 1) * envelope * volume
+		data = appendStereoSample(data, int16(value*32767))
+	}
+	return data
+}
+
+func appendStereoSample(data []byte, value int16) []byte {
+	lo := byte(value)
+	hi := byte(uint16(value) >> 8)
+	data = append(data, lo, hi, lo, hi)
+	return data
+}
+
+func (s *soundBank) Play(name string) {
+	if s == nil || !s.enabled {
+		return
+	}
+	data := s.samples[name]
+	if len(data) == 0 {
+		return
+	}
+	player := s.context.NewPlayerFromBytes(data)
+	player.Play()
+	s.players = append(s.players, player)
+}
+
+func (s *soundBank) Update() {
+	if s == nil {
+		return
+	}
+	players := s.players[:0]
+	for _, player := range s.players {
+		if player.IsPlaying() {
+			players = append(players, player)
+			continue
+		}
+		_ = player.Close()
+	}
+	s.players = players
+}
+
+func (s *soundBank) Toggle() {
+	if s == nil {
+		return
+	}
+	s.enabled = !s.enabled
+	if s.enabled {
+		s.Play("key")
+	}
+}
+
 func (g *game) Update() error {
+	g.sounds.Update()
 	if g.mode == modeName {
 		g.updateName()
 		return nil
@@ -170,6 +275,10 @@ func (g *game) Update() error {
 	}
 	if inpututil.IsKeyJustPressed(ebiten.KeyC) {
 		g.cpcVisual = !g.cpcVisual
+		return nil
+	}
+	if inpututil.IsKeyJustPressed(ebiten.KeyM) {
+		g.sounds.Toggle()
 		return nil
 	}
 	if inpututil.IsKeyJustPressed(ebiten.KeyR) && g.mode != modeTitle {
@@ -207,10 +316,12 @@ func (g *game) Update() error {
 
 func (g *game) updateTitle() {
 	if inpututil.IsKeyJustPressed(ebiten.KeyY) {
+		g.sounds.Play("key")
 		g.slowSpeed = true
 		g.mode = modeWaitStart
 	}
 	if inpututil.IsKeyJustPressed(ebiten.KeyN) {
+		g.sounds.Play("key")
 		g.slowSpeed = false
 		g.mode = modeWaitStart
 	}
@@ -266,11 +377,16 @@ func (g *game) updateGame() {
 	}
 	g.drawCPCLine(g.gameImage, oldX, oldY, g.playerX, g.playerY, cyan)
 	g.drawCPCModeLine(g.cpcGameImage, oldX, oldY, g.playerX, g.playerY, cyan)
+	if climb && g.tick%6 == 0 {
+		g.sounds.Play("climb")
+	}
 
 	switch g.collisionResult() {
 	case "complete":
+		g.sounds.Play("complete")
 		g.mode = modeComplete
 	case "dead":
+		g.sounds.Play("crash")
 		g.completed = (g.q / 5) - 1
 		g.flashTicks = 0
 		g.mode = modeZapped
@@ -388,7 +504,7 @@ func (g *game) drawTitle(dst *ebiten.Image) {
 	g.drawText(dst, 10, 6, "wondrous Nextscreen Gap.", cyan)
 	g.drawText(dst, 13, 13, "Use SPACE to climb", cyan)
 	g.drawText(dst, 8, 16, "Do you want the slow speed Y/N", cyan)
-	g.drawText(dst, 2, 22, "C CPC  F full  R reset  ESC title", cyan)
+	g.drawText(dst, 2, 22, "C CPC  M mute  F full  R reset  ESC", cyan)
 	if g.mode == modeWaitStart {
 		g.drawText(dst, 9, 25, "Press any key to continue.", cyan)
 	}
@@ -424,7 +540,7 @@ func (g *game) drawHall(dst *ebiten.Image) {
 	for i, entry := range g.hall {
 		g.drawText(dst, 3, 4+i*2, fmt.Sprintf("%-9s  %3d", entry.Name, entry.Screens), colours[i%len(colours)])
 	}
-	g.drawText(dst, 2, 22, "SPACE title  C CPC  R reset  F full", cyan)
+	g.drawText(dst, 2, 22, "SPACE title  C CPC  M mute  R reset", cyan)
 }
 
 func (g *game) drawBorders(dst *ebiten.Image) {

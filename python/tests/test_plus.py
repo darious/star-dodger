@@ -48,16 +48,20 @@ class StarDodgerPlusTests(unittest.TestCase):
         try:
             app.mode = "name"
             pygame.event.post(make_key_event("c"))
+            pygame.event.post(make_key_event("m"))
             app.handle_events()
 
             self.assertFalse(app.cpc_visual)
-            self.assertEqual(app.name_buffer, "C")
+            self.assertTrue(app.sound_enabled)
+            self.assertEqual(app.name_buffer, "CM")
 
             app.mode = "hall"
             pygame.event.post(make_key_event("c"))
+            pygame.event.post(make_key_event("m"))
             app.handle_events()
 
             self.assertTrue(app.cpc_visual)
+            self.assertFalse(app.sound_enabled)
         finally:
             pygame.quit()
 

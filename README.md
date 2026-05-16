@@ -18,6 +18,7 @@ The original BASIC listing is preserved in [`original/star-dodger.bas`](original
   - fullscreen toggle
   - restart/title shortcuts
   - persistent top-six high scores
+  - generated retro sound effects
 - `go/cmd/stardodgerplus` - Go/Ebiten version of Plus with the same classic gameplay.
 
 ## Requirements
@@ -90,6 +91,7 @@ Plus-only controls:
 
 - `C` - toggle CPC look
 - `F` - toggle fullscreen
+- `M` - toggle sound
 - `R` - restart
 - `ESC` - return to title
 

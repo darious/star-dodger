@@ -12,8 +12,11 @@ reuses that gameplay instead of changing it.
 from __future__ import annotations
 
 import argparse
+from array import array
 from importlib import resources
 import json
+import math
+import random
 import sys
 from pathlib import Path
 
@@ -35,12 +38,15 @@ SCORES_PATH = Path("star_dodger_plus_scores.json")
 CPC_MODE_WIDTH = 320
 CPC_MODE_HEIGHT = 200
 CPC_MODE_SCALE = 2
+SOUND_RATE = 22050
 
 
 class StarDodgerPlus(StarDodger):
     def __init__(self, scale: int | None = None, fullscreen: bool = False) -> None:
         self.fullscreen = fullscreen
         self.cpc_visual = False
+        self.sound_enabled = True
+        pygame.mixer.pre_init(SOUND_RATE, -16, 1, 512)
         super().__init__(scale=scale)
         self.windowed_size = (WIDTH * self.scale, HEIGHT * self.scale)
         self.scanlines = self.make_scanlines()
@@ -53,6 +59,7 @@ class StarDodgerPlus(StarDodger):
         self.configure_window()
         self.state.hall_of_fame = self.load_scores()
         pygame.display.set_caption(f"STAR DODGER Plus - original by {ORIGINAL_AUTHOR}")
+        self.sounds = self.make_sounds()
 
     def make_scanlines(self) -> pygame.Surface:
         scanlines = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
@@ -111,6 +118,52 @@ class StarDodgerPlus(StarDodger):
     def cpc_mode_point(self, x: float, y: float) -> tuple[int, int]:
         px = max(0, min(CPC_MODE_WIDTH - 1, round(x / CPC_MODE_SCALE)))
         return px, self.cpc_mode_y(y)
+
+    def make_sounds(self) -> dict[str, pygame.mixer.Sound]:
+        if not pygame.mixer.get_init():
+            try:
+                pygame.mixer.init(SOUND_RATE, -16, 1, 512)
+            except pygame.error:
+                return {}
+        return {
+            "climb": self.make_square_sound([(520, 28, 0.10)]),
+            "key": self.make_square_sound([(880, 22, 0.14)]),
+            "complete": self.make_square_sound(
+                [(660, 55, 0.18), (880, 55, 0.18), (1320, 90, 0.16)]
+            ),
+            "crash": self.make_noise_sound(220, 0.24),
+        }
+
+    def make_square_sound(
+        self,
+        notes: list[tuple[float, int, float]],
+    ) -> pygame.mixer.Sound:
+        samples = array("h")
+        for frequency, duration_ms, volume in notes:
+            total = max(1, int(SOUND_RATE * duration_ms / 1000))
+            for index in range(total):
+                phase = (index * frequency / SOUND_RATE) % 1.0
+                envelope = min(1.0, index / max(1, total * 0.12), (total - index) / max(1, total * 0.22))
+                value = 1.0 if phase < 0.5 else -1.0
+                samples.append(round(value * envelope * volume * 32767))
+        return pygame.mixer.Sound(buffer=samples.tobytes())
+
+    def make_noise_sound(self, duration_ms: int, volume: float) -> pygame.mixer.Sound:
+        samples = array("h")
+        rng = random.Random(1992)
+        total = max(1, int(SOUND_RATE * duration_ms / 1000))
+        for index in range(total):
+            envelope = math.exp(-4.5 * index / total)
+            value = rng.uniform(-1.0, 1.0) * envelope * volume
+            samples.append(round(value * 32767))
+        return pygame.mixer.Sound(buffer=samples.tobytes())
+
+    def play_sound(self, name: str) -> None:
+        if not self.sound_enabled:
+            return
+        sound = self.sounds.get(name)
+        if sound is not None:
+            sound.play()
 
     def configure_window(self) -> None:
         if self.fullscreen:
@@ -182,6 +235,10 @@ class StarDodgerPlus(StarDodger):
                 elif self.mode == "hall":
                     self.show_hall_of_fame()
                 continue
+            if event.key == pygame.K_m:
+                self.sound_enabled = not self.sound_enabled
+                self.play_sound("key")
+                continue
             if self.mode == "instructions":
                 self.choose_speed(event)
                 continue
@@ -199,6 +256,11 @@ class StarDodgerPlus(StarDodger):
                 if event.key == pygame.K_SPACE:
                     self.show_instructions()
 
+    def choose_speed(self, event: pygame.event.Event) -> None:
+        if event.key in (pygame.K_y, pygame.K_n):
+            self.play_sound("key")
+        super().choose_speed(event)
+
     def toggle_fullscreen(self) -> None:
         if not self.fullscreen:
             self.windowed_size = self.window.get_size()
@@ -207,7 +269,7 @@ class StarDodgerPlus(StarDodger):
 
     def show_instructions(self) -> None:
         super().show_instructions()
-        self.put_text(self.screen, 2, 22, "C CPC  F full  R reset  ESC title", CYAN)
+        self.put_text(self.screen, 2, 22, "C CPC  M mute  F full  R reset  ESC", CYAN)
         self.put_text(
             self.screen,
             4,
@@ -226,6 +288,22 @@ class StarDodgerPlus(StarDodger):
         self.cpc_game_surface.fill(BLACK)
         super().start_screen()
 
+    def game_tick(self) -> None:
+        was_game = self.mode == "game"
+        climb = pygame.key.get_pressed()[pygame.K_SPACE]
+        tick = self.tick
+        super().game_tick()
+        if was_game and self.mode == "game" and climb and tick % 6 == 0:
+            self.play_sound("climb")
+
+    def completed_screen(self) -> None:
+        self.play_sound("complete")
+        super().completed_screen()
+
+    def zapped(self) -> None:
+        self.play_sound("crash")
+        super().zapped()
+
     def capture_name(self, event: pygame.event.Event) -> None:
         before = list(self.state.hall_of_fame)
         super().capture_name(event)
@@ -234,7 +312,7 @@ class StarDodgerPlus(StarDodger):
 
     def show_hall_of_fame(self) -> None:
         super().show_hall_of_fame()
-        self.put_text(self.screen, 2, 22, "SPACE title  C CPC  R reset  F full", CYAN)
+        self.put_text(self.screen, 2, 22, "SPACE title  C CPC  M mute  R reset", CYAN)
 
     def line(
         self,
