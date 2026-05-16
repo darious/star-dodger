@@ -4,6 +4,12 @@ A Python/pygame remake of **STAR DODGER v2**, an Amstrad CPC BASIC type-in game 
 
 The original BASIC listing is preserved in [`original/star-dodger.bas`](original/star-dodger.bas). The Python and Go versions keep the original attribution and gameplay idea: hold `SPACE` to climb, release it to descend, dodge the killer asterisks, and reach the Nextscreen Gap.
 
+## Screenshots
+
+| Classic | Plus |
+| --- | --- |
+| ![Classic gameplay screenshot](media/classic.png) | ![Plus gameplay screenshot](media/plus.png) |
+
 ## Versions
 
 - `python/stardodger/classic.py` - faithful pygame port of the BASIC version.
@@ -55,6 +61,13 @@ Or build a native binary:
 ```bash
 go build ./go/cmd/stardodgerplus
 ./stardodgerplus
+```
+
+Tagged releases build Go binaries for Linux, macOS, and Windows:
+
+```bash
+git tag v0.1.0
+git push origin v0.1.0
 ```
 
 ## Layout
