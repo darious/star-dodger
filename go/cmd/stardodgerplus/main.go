@@ -11,7 +11,7 @@ import (
 	"sort"
 	"time"
 
-	"github.com/darious/star-dodger/internal/nameentry"
+	"github.com/darious/star-dodger/go/internal/nameentry"
 	"github.com/hajimehoshi/ebiten/v2"
 	"github.com/hajimehoshi/ebiten/v2/ebitenutil"
 	"github.com/hajimehoshi/ebiten/v2/inpututil"

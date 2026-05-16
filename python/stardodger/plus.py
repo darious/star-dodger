@@ -5,8 +5,8 @@ Classic STAR DODGER v2 gameplay with practical modern conveniences:
 resizable/fullscreen scaling, restart/title keys, and persistent high scores.
 
 Original Amstrad CPC BASIC game: STAR DODGER v2 by G. French (14-2-92).
-The faithful port remains in star_dodger.py; this file intentionally reuses
-that gameplay instead of changing it.
+The faithful port remains in stardodger.classic; this file intentionally
+reuses that gameplay instead of changing it.
 """
 
 from __future__ import annotations
@@ -18,7 +18,7 @@ from pathlib import Path
 
 import pygame
 
-from star_dodger import (
+from .classic import (
     BLACK,
     CYAN,
     HEIGHT,

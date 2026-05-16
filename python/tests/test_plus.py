@@ -9,8 +9,8 @@ os.environ.setdefault("SDL_VIDEODRIVER", "dummy")
 
 import pygame
 
-import star_dodger_plus
-from star_dodger_plus import StarDodgerPlus
+from stardodger import plus
+from stardodger.plus import StarDodgerPlus
 
 
 def make_key_event(char: str) -> pygame.event.Event:
@@ -23,7 +23,7 @@ def make_key_event(char: str) -> pygame.event.Event:
 
 class StarDodgerPlusTests(unittest.TestCase):
     def test_name_entry_accepts_chris_without_restart(self) -> None:
-        star_dodger_plus.SCORES_PATH = Path(os.environ.get("TMPDIR", "/tmp")) / (
+        plus.SCORES_PATH = Path(os.environ.get("TMPDIR", "/tmp")) / (
             "star_dodger_plus_test_scores.json"
         )
         app = StarDodgerPlus(scale=1)
