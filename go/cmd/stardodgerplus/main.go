@@ -11,6 +11,7 @@ import (
 	"sort"
 	"time"
 
+	"github.com/darious/star-dodger/go/internal/cpcfont"
 	"github.com/darious/star-dodger/go/internal/nameentry"
 	"github.com/hajimehoshi/ebiten/v2"
 	"github.com/hajimehoshi/ebiten/v2/ebitenutil"
@@ -22,6 +23,8 @@ import (
 const (
 	screenW        = 640
 	screenH        = 400
+	cpcModeW       = 320
+	cpcModeH       = 200
 	originalAuthor = "G. French"
 	originalDate   = "14-2-92"
 	scorePath      = "star_dodger_plus_scores.json"
@@ -62,9 +65,12 @@ type obstacle struct {
 }
 
 type game struct {
-	mode      mode
-	rng       *rand.Rand
-	gameImage *ebiten.Image
+	mode         mode
+	rng          *rand.Rand
+	gameImage    *ebiten.Image
+	cpcGameImage *ebiten.Image
+	cpcVisual    bool
+	cpcFont      *cpcfont.Font
 
 	hall []scoreEntry
 
@@ -90,11 +96,18 @@ func main() {
 	ebiten.SetWindowSize(screenW*2, screenH*2)
 	ebiten.SetWindowResizingMode(ebiten.WindowResizingModeEnabled)
 
+	font, err := cpcfont.New()
+	if err != nil {
+		log.Fatal(err)
+	}
+
 	g := &game{
-		mode:      modeTitle,
-		rng:       rand.New(rand.NewSource(time.Now().UnixNano())),
-		gameImage: ebiten.NewImage(screenW, screenH),
-		hall:      loadScores(),
+		mode:         modeTitle,
+		rng:          rand.New(rand.NewSource(time.Now().UnixNano())),
+		gameImage:    ebiten.NewImage(screenW, screenH),
+		cpcGameImage: ebiten.NewImage(cpcModeW, cpcModeH),
+		hall:         loadScores(),
+		cpcFont:      font,
 	}
 
 	if err := ebiten.RunGame(g); err != nil {
@@ -154,6 +167,10 @@ func (g *game) Update() error {
 	}
 	if inpututil.IsKeyJustPressed(ebiten.KeyF) {
 		ebiten.SetFullscreen(!ebiten.IsFullscreen())
+	}
+	if inpututil.IsKeyJustPressed(ebiten.KeyC) {
+		g.cpcVisual = !g.cpcVisual
+		return nil
 	}
 	if inpututil.IsKeyJustPressed(ebiten.KeyR) && g.mode != modeTitle {
 		g.startRun()
@@ -218,8 +235,11 @@ func (g *game) startScreen() {
 	g.tick = 0
 	g.obstacles = g.makeObstacles(g.q)
 	g.gameImage.Fill(black)
+	g.cpcGameImage.Fill(black)
 	g.drawBorders(g.gameImage)
+	g.drawCPCModeBorders(g.cpcGameImage)
 	g.drawObstacles(g.gameImage)
+	g.drawCPCModeObstacles(g.cpcGameImage)
 }
 
 func (g *game) makeObstacles(count int) []obstacle {
@@ -245,6 +265,7 @@ func (g *game) updateGame() {
 		g.playerY -= g.step
 	}
 	g.drawCPCLine(g.gameImage, oldX, oldY, g.playerX, g.playerY, cyan)
+	g.drawCPCModeLine(g.cpcGameImage, oldX, oldY, g.playerX, g.playerY, cyan)
 
 	switch g.collisionResult() {
 	case "complete":
@@ -290,6 +311,10 @@ func (g *game) closeGap() {
 	g.drawPlot(g.gameImage, 629, g.gapTop, green)
 	g.drawPlot(g.gameImage, 627, g.gapBottom, green)
 	g.drawPlot(g.gameImage, 627, g.gapTop, green)
+	g.drawCPCModePlot(g.cpcGameImage, 629, g.gapBottom, green)
+	g.drawCPCModePlot(g.cpcGameImage, 629, g.gapTop, green)
+	g.drawCPCModePlot(g.cpcGameImage, 627, g.gapBottom, green)
+	g.drawCPCModePlot(g.cpcGameImage, 627, g.gapTop, green)
 }
 
 func (g *game) updateZapped() {
@@ -331,7 +356,13 @@ func (g *game) Draw(screen *ebiten.Image) {
 	case modeTitle, modeWaitStart:
 		g.drawTitle(screen)
 	case modeGame:
-		screen.DrawImage(g.gameImage, nil)
+		if g.cpcVisual {
+			opts := &ebiten.DrawImageOptions{}
+			opts.GeoM.Scale(2, 2)
+			screen.DrawImage(g.cpcGameImage, opts)
+		} else {
+			screen.DrawImage(g.gameImage, nil)
+		}
 	case modeComplete:
 		g.drawComplete(screen)
 	case modeZapped:
@@ -340,6 +371,9 @@ func (g *game) Draw(screen *ebiten.Image) {
 		g.drawName(screen)
 	case modeHall:
 		g.drawHall(screen)
+	}
+	if g.cpcVisual {
+		g.drawCPCVisual(screen)
 	}
 }
 
@@ -354,7 +388,7 @@ func (g *game) drawTitle(dst *ebiten.Image) {
 	g.drawText(dst, 10, 6, "wondrous Nextscreen Gap.", cyan)
 	g.drawText(dst, 13, 13, "Use SPACE to climb", cyan)
 	g.drawText(dst, 8, 16, "Do you want the slow speed Y/N", cyan)
-	g.drawText(dst, 3, 22, "Go Plus: F fullscreen  R restart  ESC title  Q quit", cyan)
+	g.drawText(dst, 2, 22, "C CPC  F full  R reset  ESC title", cyan)
 	if g.mode == modeWaitStart {
 		g.drawText(dst, 9, 25, "Press any key to continue.", cyan)
 	}
@@ -390,7 +424,7 @@ func (g *game) drawHall(dst *ebiten.Image) {
 	for i, entry := range g.hall {
 		g.drawText(dst, 3, 4+i*2, fmt.Sprintf("%-9s  %3d", entry.Name, entry.Screens), colours[i%len(colours)])
 	}
-	g.drawText(dst, 4, 22, "SPACE title   R restart   F fullscreen", cyan)
+	g.drawText(dst, 2, 22, "SPACE title  C CPC  R reset  F full", cyan)
 }
 
 func (g *game) drawBorders(dst *ebiten.Image) {
@@ -415,18 +449,67 @@ func (g *game) drawObstacles(dst *ebiten.Image) {
 	}
 }
 
+func (g *game) drawCPCModeBorders(dst *ebiten.Image) {
+	g.drawCPCModeLine(dst, 0, 0, 629, 0, white)
+	g.drawCPCModeLine(dst, 629, 0, 629, g.gapBottom, white)
+	g.drawCPCModeLine(dst, 629, g.gapTop, 629, 399, white)
+	g.drawCPCModeLine(dst, 627, 0, 627, g.gapBottom, white)
+	g.drawCPCModeLine(dst, 627, g.gapTop, 627, 399, white)
+	g.drawCPCModeLine(dst, 0, 399, 629, 399, white)
+	g.drawCPCModeLine(dst, 0, 0, 0, 399, white)
+	g.drawCPCModeLine(dst, 636, 0, 636, 399, magenta)
+	g.drawCPCModeLine(dst, 638, 0, 638, 399, white)
+	g.drawCPCModePlot(dst, 629, g.gapBottom, green)
+	g.drawCPCModePlot(dst, 629, g.gapTop, green)
+	g.drawCPCModePlot(dst, 627, g.gapBottom, green)
+	g.drawCPCModePlot(dst, 627, g.gapTop, green)
+}
+
+func (g *game) drawCPCModeObstacles(dst *ebiten.Image) {
+	for _, ob := range g.obstacles {
+		g.cpcFont.DrawScaled(dst, "*", int(math.Round(ob.X/2))-4, cpcModeY(ob.Y)-4, 0.5, white)
+	}
+}
+
 func (g *game) drawCPCLine(dst *ebiten.Image, x1, y1, x2, y2 float64, clr color.Color) {
 	ebitenutil.DrawLine(dst, x1, float64(cpcY(y1)), x2, float64(cpcY(y2)), clr)
 	ebitenutil.DrawLine(dst, x1, float64(cpcY(y1))+1, x2, float64(cpcY(y2))+1, clr)
+}
+
+func (g *game) drawCPCModeLine(dst *ebiten.Image, x1, y1, x2, y2 float64, clr color.Color) {
+	ebitenutil.DrawLine(
+		dst,
+		float64(clampInt(int(math.Round(x1/2)), 0, cpcModeW-1)),
+		float64(cpcModeY(y1)),
+		float64(clampInt(int(math.Round(x2/2)), 0, cpcModeW-1)),
+		float64(cpcModeY(y2)),
+		clr,
+	)
 }
 
 func (g *game) drawPlot(dst *ebiten.Image, x, y float64, clr color.Color) {
 	ebitenutil.DrawRect(dst, x-1, float64(cpcY(y))-1, 3, 3, clr)
 }
 
+func (g *game) drawCPCModePlot(dst *ebiten.Image, x, y float64, clr color.Color) {
+	ebitenutil.DrawRect(
+		dst,
+		float64(clampInt(int(math.Round(x/2)), 0, cpcModeW-1)-1),
+		float64(cpcModeY(y)-1),
+		2,
+		2,
+		clr,
+	)
+}
+
 func (g *game) drawText(dst *ebiten.Image, col, row int, message string, clr color.Color) {
 	x := (col - 1) * 16
-	y := (row-1)*16 + 13
+	y := (row - 1) * 16
+	if g.cpcVisual && g.cpcFont != nil {
+		g.cpcFont.Draw(dst, message, x, y, clr)
+		return
+	}
+	y += 13
 	text.Draw(dst, message, basicfont.Face7x13, x, y, clr)
 }
 
@@ -437,8 +520,35 @@ func (g *game) drawRainbow(dst *ebiten.Image, col, row int, message string) {
 	}
 }
 
+func (g *game) drawCPCVisual(dst *ebiten.Image) {
+	for y := 0; y < screenH; y += 4 {
+		ebitenutil.DrawRect(dst, 0, float64(y), screenW, 1, color.RGBA{0, 0, 0, 46})
+	}
+	for i := 0; i < 5; i++ {
+		inset := float64(i)
+		ebitenutil.DrawRect(dst, inset, inset, screenW-inset*2, 1, color.RGBA{0, 0, 128, 255})
+		ebitenutil.DrawRect(dst, inset, screenH-1-inset, screenW-inset*2, 1, color.RGBA{0, 0, 128, 255})
+		ebitenutil.DrawRect(dst, inset, inset, 1, screenH-inset*2, color.RGBA{0, 0, 128, 255})
+		ebitenutil.DrawRect(dst, screenW-1-inset, inset, 1, screenH-inset*2, color.RGBA{0, 0, 128, 255})
+	}
+}
+
 func cpcY(y float64) int {
 	return screenH - int(math.Round(y))
+}
+
+func cpcModeY(y float64) int {
+	return clampInt(cpcModeH-int(math.Round(y/2)), 0, cpcModeH-1)
+}
+
+func clampInt(value, minValue, maxValue int) int {
+	if value < minValue {
+		return minValue
+	}
+	if value > maxValue {
+		return maxValue
+	}
+	return value
 }
 
 func anyKeyJustPressed() bool {

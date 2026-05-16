@@ -50,8 +50,12 @@ def main() -> None:
 
     plus = StarDodgerPlus(scale=1)
     draw_sample_trail(plus)
-    plus.put_text(plus.screen, 3, 22, "Plus: F fullscreen  R restart  ESC title  Q quit", (0, 232, 255))
+    plus.put_text(plus.screen, 2, 22, "C CPC  F full  R reset  ESC title", (0, 232, 255))
     save_scaled(plus.screen, MEDIA / "plus.png")
+    plus.cpc_visual = True
+    draw_sample_trail(plus)
+    plus.put_text(plus.screen, 2, 22, "C CPC  F full  R reset  ESC title", (0, 232, 255))
+    save_scaled(plus.cpc_frame(), MEDIA / "plus-cpc.png")
     pygame.quit()
 
 

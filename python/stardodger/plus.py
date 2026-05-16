@@ -12,6 +12,7 @@ reuses that gameplay instead of changing it.
 from __future__ import annotations
 
 import argparse
+from importlib import resources
 import json
 import sys
 from pathlib import Path
@@ -31,16 +32,85 @@ from .classic import (
 
 
 SCORES_PATH = Path("star_dodger_plus_scores.json")
+CPC_MODE_WIDTH = 320
+CPC_MODE_HEIGHT = 200
+CPC_MODE_SCALE = 2
 
 
 class StarDodgerPlus(StarDodger):
     def __init__(self, scale: int | None = None, fullscreen: bool = False) -> None:
         self.fullscreen = fullscreen
+        self.cpc_visual = False
         super().__init__(scale=scale)
         self.windowed_size = (WIDTH * self.scale, HEIGHT * self.scale)
+        self.scanlines = self.make_scanlines()
+        self.cpc_glyphs = self.load_cpc_glyphs()
+        self.cpc_glyphs_mode1 = {
+            char: pygame.transform.scale(glyph, (8, 8))
+            for char, glyph in self.cpc_glyphs.items()
+        }
+        self.cpc_game_surface = pygame.Surface((CPC_MODE_WIDTH, CPC_MODE_HEIGHT))
         self.configure_window()
         self.state.hall_of_fame = self.load_scores()
         pygame.display.set_caption(f"STAR DODGER Plus - original by {ORIGINAL_AUTHOR}")
+
+    def make_scanlines(self) -> pygame.Surface:
+        scanlines = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
+        for y in range(0, HEIGHT, 4):
+            pygame.draw.rect(scanlines, (0, 0, 0, 38), pygame.Rect(0, y, WIDTH, 1))
+        return scanlines
+
+    def load_cpc_glyphs(self) -> dict[str, pygame.Surface]:
+        glyphs: dict[str, pygame.Surface] = {}
+        font_path = resources.files("stardodger.assets").joinpath("amstrad-character-set.png")
+        sheet = pygame.image.load(str(font_path)).convert()
+        for code in range(256):
+            glyph = pygame.Surface((16, 16), pygame.SRCALPHA)
+            source_x = 1 + (code % 32) * 9
+            source_y = 1 + (code // 32) * 9
+            for y in range(8):
+                for x in range(8):
+                    r, g, b, _a = sheet.get_at((source_x + x, source_y + y))
+                    if r < 80 and g < 80 and b < 80:
+                        pygame.draw.rect(glyph, (255, 255, 255), pygame.Rect(x * 2, y * 2, 2, 2))
+            glyphs[chr(code)] = glyph
+        return glyphs
+
+    def put_text(
+        self,
+        target: pygame.Surface,
+        column: int,
+        row: int,
+        value: str,
+        colour: tuple[int, int, int] = CYAN,
+        font: pygame.font.Font | None = None,
+    ) -> None:
+        if not self.cpc_visual:
+            super().put_text(target, column, row, value, colour, font)
+            return
+        x, y = self.text_xy(column, row)
+        for index, char in enumerate(value):
+            glyph = self.cpc_glyphs.get(char, self.cpc_glyphs.get("?"))
+            if glyph is None:
+                continue
+            coloured = self.tint_glyph(glyph, colour)
+            target.blit(coloured, (x + index * 16, y))
+
+    def tint_glyph(
+        self,
+        glyph: pygame.Surface,
+        colour: tuple[int, int, int],
+    ) -> pygame.Surface:
+        coloured = glyph.copy()
+        coloured.fill((*colour, 255), special_flags=pygame.BLEND_RGBA_MULT)
+        return coloured
+
+    def cpc_mode_y(self, y: float) -> int:
+        return max(0, min(CPC_MODE_HEIGHT - 1, CPC_MODE_HEIGHT - round(y / CPC_MODE_SCALE)))
+
+    def cpc_mode_point(self, x: float, y: float) -> tuple[int, int]:
+        px = max(0, min(CPC_MODE_WIDTH - 1, round(x / CPC_MODE_SCALE)))
+        return px, self.cpc_mode_y(y)
 
     def configure_window(self) -> None:
         if self.fullscreen:
@@ -105,6 +175,13 @@ class StarDodgerPlus(StarDodger):
             if event.key == pygame.K_f:
                 self.toggle_fullscreen()
                 continue
+            if event.key == pygame.K_c:
+                self.cpc_visual = not self.cpc_visual
+                if self.mode == "instructions":
+                    self.show_instructions()
+                elif self.mode == "hall":
+                    self.show_hall_of_fame()
+                continue
             if self.mode == "instructions":
                 self.choose_speed(event)
                 continue
@@ -130,7 +207,7 @@ class StarDodgerPlus(StarDodger):
 
     def show_instructions(self) -> None:
         super().show_instructions()
-        self.put_text(self.screen, 3, 22, "Plus: F fullscreen  R restart  ESC title  Q quit", CYAN)
+        self.put_text(self.screen, 2, 22, "C CPC  F full  R reset  ESC title", CYAN)
         self.put_text(
             self.screen,
             4,
@@ -145,6 +222,10 @@ class StarDodgerPlus(StarDodger):
         self.wait_callback = None
         self.start_screen()
 
+    def start_screen(self) -> None:
+        self.cpc_game_surface.fill(BLACK)
+        super().start_screen()
+
     def capture_name(self, event: pygame.event.Event) -> None:
         before = list(self.state.hall_of_fame)
         super().capture_name(event)
@@ -153,7 +234,49 @@ class StarDodgerPlus(StarDodger):
 
     def show_hall_of_fame(self) -> None:
         super().show_hall_of_fame()
-        self.put_text(self.screen, 3, 22, "SPACE title   R restart   F fullscreen", CYAN)
+        self.put_text(self.screen, 2, 22, "SPACE title  C CPC  R reset  F full", CYAN)
+
+    def line(
+        self,
+        x1: float,
+        y1: float,
+        x2: float,
+        y2: float,
+        colour: tuple[int, int, int],
+        width: int = 2,
+    ) -> None:
+        super().line(x1, y1, x2, y2, colour, width)
+        pygame.draw.line(
+            self.cpc_game_surface,
+            colour,
+            self.cpc_mode_point(x1, y1),
+            self.cpc_mode_point(x2, y2),
+            max(1, round(width / CPC_MODE_SCALE)),
+        )
+
+    def plot(self, x: float, y: float, colour: tuple[int, int, int], radius: int = 2) -> None:
+        super().plot(x, y, colour, radius)
+        px, py = self.cpc_mode_point(x, y)
+        pygame.draw.rect(self.cpc_game_surface, colour, pygame.Rect(px - 1, py - 1, 2, 2))
+
+    def draw_obstacles(self) -> None:
+        super().draw_obstacles()
+        star = self.tint_glyph(self.cpc_glyphs_mode1["*"], (235, 235, 235))
+        for x, y in self.obstacles:
+            self.cpc_game_surface.blit(star, (round(x / CPC_MODE_SCALE) - 4, self.cpc_mode_y(y) - 4))
+
+    def cpc_game_frame(self) -> pygame.Surface:
+        return pygame.transform.scale(
+            self.cpc_game_surface,
+            (CPC_MODE_WIDTH * CPC_MODE_SCALE, CPC_MODE_HEIGHT * CPC_MODE_SCALE),
+        )
+
+    def cpc_frame(self) -> pygame.Surface:
+        frame = self.cpc_game_frame() if self.mode == "game" else self.screen.copy()
+        frame.blit(self.scanlines, (0, 0))
+        pygame.draw.rect(frame, (0, 0, 128), frame.get_rect(), 5)
+        pygame.draw.rect(frame, (0, 0, 0), frame.get_rect(), 1)
+        return frame
 
     def present(self) -> None:
         window_w, window_h = self.window.get_size()
@@ -161,10 +284,11 @@ class StarDodgerPlus(StarDodger):
         scaled_w = max(1, round(WIDTH * scale))
         scaled_h = max(1, round(HEIGHT * scale))
         self.window.fill(BLACK)
+        source = self.cpc_frame() if self.cpc_visual else self.screen
         if scaled_w == WIDTH and scaled_h == HEIGHT:
-            frame = self.screen
+            frame = source
         else:
-            frame = pygame.transform.scale(self.screen, (scaled_w, scaled_h))
+            frame = pygame.transform.scale(source, (scaled_w, scaled_h))
         self.window.blit(frame, ((window_w - scaled_w) // 2, (window_h - scaled_h) // 2))
         pygame.display.flip()
 

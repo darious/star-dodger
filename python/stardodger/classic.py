@@ -26,6 +26,9 @@ TEXT_COLS = 40
 CELL_W = 16
 CELL_H = 16
 TITLE = "StarDodger"
+UPDATES_PER_SECOND = 60
+UPDATE_STEP_SECONDS = 1 / UPDATES_PER_SECOND
+MAX_FRAME_SECONDS = 0.25
 
 BLACK = (0, 0, 0)
 WHITE = (235, 235, 235)
@@ -85,6 +88,7 @@ class StarDodger:
         self.gap_bottom = 172
         self.step = 4
         self.tick = 0
+        self.update_accumulator = 0.0
         self.flash_until = 0
         self.flash_count = 0
         self.name_buffer = ""
@@ -100,12 +104,21 @@ class StarDodger:
 
     def run(self) -> None:
         self.show_instructions()
+        self.clock.tick()
         while True:
+            elapsed = min(self.clock.tick(UPDATES_PER_SECOND) / 1000.0, MAX_FRAME_SECONDS)
             self.handle_events()
-            if self.mode == "game":
-                self.game_tick()
+            self.advance_game(elapsed)
             self.present()
-            self.clock.tick(60)
+
+    def advance_game(self, elapsed_seconds: float) -> None:
+        if self.mode != "game":
+            self.update_accumulator = 0.0
+            return
+        self.update_accumulator += elapsed_seconds
+        while self.update_accumulator + 1e-9 >= UPDATE_STEP_SECONDS and self.mode == "game":
+            self.game_tick()
+            self.update_accumulator -= UPDATE_STEP_SECONDS
 
     def handle_events(self) -> None:
         for event in pygame.event.get():

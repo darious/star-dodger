@@ -6,9 +6,9 @@ The original BASIC listing is preserved in [`original/star-dodger.bas`](original
 
 ## Screenshots
 
-| Classic | Plus |
-| --- | --- |
-| ![Classic gameplay screenshot](media/classic.png) | ![Plus gameplay screenshot](media/plus.png) |
+| Classic | Plus | Plus CPC Look |
+| --- | --- | --- |
+| ![Classic gameplay screenshot](media/classic.png) | ![Plus gameplay screenshot](media/plus.png) | ![Plus CPC look screenshot](media/plus-cpc.png) |
 
 ## Versions
 
@@ -88,6 +88,7 @@ go/internal/nameentry/     Small Go helper package with unit tests
 
 Plus-only controls:
 
+- `C` - toggle CPC look
 - `F` - toggle fullscreen
 - `R` - restart
 - `ESC` - return to title
@@ -97,3 +98,5 @@ Plus-only controls:
 Original game: **STAR DODGER v2** by **G. French (14-2-92)**.
 
 This repository is a Python remake/port and includes the original BASIC listing for reference and preservation.
+
+The CPC-look text uses the public-domain [`Amstrad Character Set.png`](https://commons.wikimedia.org/wiki/File:Amstrad_Character_Set.png) sprite sheet by Mortenbscom from Wikimedia Commons, published under CC0 1.0.

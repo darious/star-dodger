@@ -10,6 +10,7 @@ os.environ.setdefault("SDL_VIDEODRIVER", "dummy")
 import pygame
 
 from stardodger import plus
+from stardodger.classic import UPDATE_STEP_SECONDS
 from stardodger.plus import StarDodgerPlus
 
 
@@ -39,6 +40,49 @@ class StarDodgerPlusTests(unittest.TestCase):
             self.assertEqual(app.name_buffer, "CHRIS")
             self.assertEqual(app.state.q, 25)
             self.assertEqual(app.player_x, 123)
+        finally:
+            pygame.quit()
+
+    def test_cpc_toggle_does_not_intercept_name_entry(self) -> None:
+        app = StarDodgerPlus(scale=1)
+        try:
+            app.mode = "name"
+            pygame.event.post(make_key_event("c"))
+            app.handle_events()
+
+            self.assertFalse(app.cpc_visual)
+            self.assertEqual(app.name_buffer, "C")
+
+            app.mode = "hall"
+            pygame.event.post(make_key_event("c"))
+            app.handle_events()
+
+            self.assertTrue(app.cpc_visual)
+        finally:
+            pygame.quit()
+
+    def test_fixed_update_pace_matches_go_steps(self) -> None:
+        app = StarDodgerPlus(scale=1)
+        try:
+            app.state.slow_speed = False
+            app.start_screen()
+            app.obstacles = []
+            app.player_y = 390
+            for _ in range(60):
+                app.advance_game(UPDATE_STEP_SECONDS)
+
+            self.assertEqual(app.mode, "game")
+            self.assertAlmostEqual(app.player_x, 240)
+
+            app.state.slow_speed = True
+            app.start_screen()
+            app.obstacles = []
+            app.player_y = 390
+            for _ in range(60):
+                app.advance_game(UPDATE_STEP_SECONDS)
+
+            self.assertEqual(app.mode, "game")
+            self.assertAlmostEqual(app.player_x, 180)
         finally:
             pygame.quit()
 
