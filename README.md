@@ -12,6 +12,7 @@ The original BASIC listing is preserved in [`star-dodger.bas`](star-dodger.bas).
   - fullscreen toggle
   - restart/title shortcuts
   - persistent top-six high scores
+- `cmd/stardodgerplus` - Go/Ebiten version of Plus with the same classic gameplay.
 
 ## Requirements
 
@@ -19,6 +20,8 @@ The original BASIC listing is preserved in [`star-dodger.bas`](star-dodger.bas).
 - [uv](https://docs.astral.sh/uv/)
 
 `pygame` is declared in `pyproject.toml` and installed automatically by `uv`.
+
+The Go version requires Go 1.24+ and downloads Ebiten through Go modules.
 
 ## Run
 
@@ -39,6 +42,19 @@ Useful Plus options:
 ```bash
 uv run ./star_dodger_plus.py --fullscreen
 uv run ./star_dodger_plus.py --scale 3
+```
+
+Go Plus version:
+
+```bash
+go run ./cmd/stardodgerplus
+```
+
+Or build a native binary:
+
+```bash
+go build ./cmd/stardodgerplus
+./stardodgerplus
 ```
 
 ## Controls

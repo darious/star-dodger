@@ -6,6 +6,8 @@ __pycache__/
 .env.*
 
 star_dodger_plus_scores.json
+/stardodgerplus
+/stardodgerplus.exe
 
 .DS_Store
 Thumbs.db
